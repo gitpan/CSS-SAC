@@ -20,7 +20,7 @@ use vars qw(
             %DIM_MAP
             %FUNC_MAP
            );
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 use CSS::SAC::ConditionFactory  qw();
 use CSS::SAC::SelectorFactory   qw();
@@ -438,7 +438,18 @@ sub parse {
             # parse the rule
             my $rule;
             warn "[SAC] parsing rule\n" if DEBUG;
-            ($rule,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}'"/,qr/\s*/); #"
+
+            ### BUG
+            # The Text::Balanced extractions below are not correct since they don't take
+            # comments into account. With the first one, it'll fail on apostrophes in
+            # comments, with the latter, on unbalanced apos and } in comments and
+            # apos-strings. The latter is used currently because it is less likely to fail,
+            # but what is needed is a real parser that steps inside the black parsing out
+            # comments and property values. The good news is that we have most of the bits
+            # to do that right already.
+
+            #($rule,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}'"/,qr/\s*/); #"
+            ($rule,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}"/,qr/\s*/); #"
             $sac->parse_rule(\$rule);
 
             # end of the rule
@@ -1190,6 +1201,7 @@ sub parse_style_declaration {
 sub parse_property_value {
     my $sac = shift;
     my $css = shift;
+    my $att = shift || 0;
 
     $$css =~ s/^\s*//;
 
@@ -1201,7 +1213,7 @@ sub parse_property_value {
         $sac->parse_comments($css);
 
         # exit conditions
-        if (! length($$css) or $$css =~ m/^\s*(?:;|!)/) {
+        if (! length($$css) or $$css =~ m/^\s*(?:;|!)/ or ($att and $$css =~ s/^\s*(?:\))//)) {
             last;
         }
 
@@ -1273,18 +1285,21 @@ sub parse_property_value {
         }
 
         # functions
-        elsif (
-                ($value,$$css,$text) = Text::Balanced::extract_bracketed($$css,q/()'"/,qr/$RE_IDENT/)
-                and
-                length $text
-              ) {
+#        elsif (
+#                ($value,$$css,$text) = Text::Balanced::extract_bracketed($$css,q/()'"/,qr/$RE_IDENT/)
+#                and
+#                length $text
+#              ) {
+        elsif ($$css =~ s/^($RE_IDENT)\(//) {
 
             # cleanup the func and args
-            $text = lc $text;
-            $value =~ s/^\(\s*//;
-            $value =~ s/\s*\)$//;
-            $value =~ s/^(?:"|')//; #"
-            $value =~ s/(?:"|')$//; #"
+#            $text = lc $text;
+#            $value =~ s/^\(\s*//;
+#            $value =~ s/\s*\)$//;
+#            $value =~ s/^(?:"|')//; #"
+#            $value =~ s/(?:"|')$//; #"
+            $text = lc $1;
+            $value = $sac->parse_property_value($css, 1);
 
             # get the appropriate type
             if ($FUNC_MAP{$text}) {
@@ -1730,7 +1745,7 @@ and feature requests.
 
  - add DOM-like hasFeature support (in view of SAC 3)
 
- - prefix all constants with SAC_. Keep the old ones around for a few 
+ - prefix all constants with SAC_. Keep the old ones around for a few
  versions, importable with :old-constants.
 
  - update docs

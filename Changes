@@ -1,5 +1,13 @@
 Revision history for Perl extension CSS::SAC.
 
+0.05  2003-07-07 19:56
+	- changed some code (it's not really a bugfix, it changes from a
+	  bug to a less likely one -- a real fix will come later) thanks
+	  to a report and patch from Briac Pilpré.
+	- fixed a bug to parse attr(color, color) correctly, thanks to
+	  Bjoern Hoehrmann.
+
+
 0.04  Sat Jul 06 16:13 2001
 	- fixed a bug in Text::Balanced that caused blocks to be
 	incorrectly extracted when they contained backslashed followed by
