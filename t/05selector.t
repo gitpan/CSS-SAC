@@ -8,6 +8,9 @@ BEGIN {
 
 use strict;
 
+# todo: avoid length on undef below
+no warnings;
+
 #- test parsing and selector handling ------------------------------#
 
 my $tst_result = '';

@@ -27,3 +27,4 @@ lib/CSS/SAC/TestWriter.pm
 lib/CSS/SAC/Writer.pm
 t/00base.t
 t/05selector.t
+META.yml                                 Module meta-data (added by MakeMaker)

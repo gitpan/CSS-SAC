@@ -1,12 +1,15 @@
 Revision history for Perl extension CSS::SAC.
 
+0.06  Sun Oct 19 21:47 2004
+        - Module now maintained by Bjoern Hoehrmann
+        - More accurate behavior wrt to namespace declarations
+
 0.05  2003-07-07 19:56
 	- changed some code (it's not really a bugfix, it changes from a
 	  bug to a less likely one -- a real fix will come later) thanks
 	  to a report and patch from Briac Pilpré.
 	- fixed a bug to parse attr(color, color) correctly, thanks to
 	  Bjoern Hoehrmann.
-
 
 0.04  Sat Jul 06 16:13 2001
 	- fixed a bug in Text::Balanced that caused blocks to be
@@ -23,7 +26,6 @@ Revision history for Perl extension CSS::SAC.
 	those as extensions in various browsers (suggested by BH).
 	- added _ to the IDENT characters (it's in CSS2 Errata)
 	- fixed @page parsing (patch by SG)
-
 
 0.03  Mon Apr 23 16:44:16 2001
 	- switched all to Class::ArrayObjects (which used to be CSS::SAC::Helpers::ArrayObjects)

@@ -20,7 +20,7 @@ use vars qw(
             %DIM_MAP
             %FUNC_MAP
            );
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 use CSS::SAC::ConditionFactory  qw();
 use CSS::SAC::SelectorFactory   qw();
@@ -755,7 +755,7 @@ sub parse_simple_selector {
             $lname = ($3 eq '*')?undef:$3;
             if (defined $2 and $2 eq '|') {
                 if (!$1) {
-                    $ns = $sac->[_ns_map_]->{'#default'} || '';
+                    $ns = ''; # |E matches elements in no namespace
                 }
                 elsif ($1 eq '*') {
                     $ns = undef; # undef means all, '' means default
@@ -765,7 +765,9 @@ sub parse_simple_selector {
                 }
             }
             else {
-                $ns = $sac->[_ns_map_]->{'#default'} || '';
+                # E matches elements in the default namespace or
+                # any namespace if no default namespace is declared
+                $ns = $sac->[_ns_map_]->{'#default'} || undef;
             }
 
             # push it
@@ -802,7 +804,7 @@ sub parse_simple_selector {
             $lname = ($3 eq '*')?undef:$3;
             if (defined $2 and $2 eq '|') {
                 if (!$1) {
-                    $ns = $sac->[_ns_map_]->{'#default'} || '';
+                    $ns = '' # [|a] matches attributes in no namespace;
                 }
                 elsif ($1 eq '*') {
                     $ns = undef; # undef means all, '' means default
@@ -812,7 +814,7 @@ sub parse_simple_selector {
                 }
             }
             else {
-                $ns = $sac->[_ns_map_]->{'#default'} || '';
+                $ns = ''; # [a] is equivalent to [|a]
             }
 
             # if there's more, parse on
@@ -1745,7 +1747,7 @@ and feature requests.
 
  - add DOM-like hasFeature support (in view of SAC 3)
 
- - prefix all constants with SAC_. Keep the old ones around for a few
+ - prefix all constants with SAC_. Keep the old ones around for a few 
  versions, importable with :old-constants.
 
  - update docs
