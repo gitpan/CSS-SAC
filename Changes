@@ -1,0 +1,30 @@
+Revision history for Perl extension CSS::SAC.
+
+0.03  Mon Apr 23 16:44:16 2001
+	- switched all to Class::ArrayObjects (which used to be CSS::SAC::Helpers::ArrayObjects)
+	- provide both standard and perlified names for methods
+	- added lots of documentation (can still be improved, suggestions
+	welcome)
+	- removed SACPrinter and replaced it with CSS::SAC::Writer, more
+	flexible
+	- fixed a number of small bugs here and there
+	- fixed a serious bug whereby it was possible to tokenize two
+	selectors in a row without a combinator (it now is seen as a fatal
+	error but perhaps it should just flag an error (and keep on
+	parsing)
+	- the parser was creating negative conditions, something that I
+	don't think really exists in the spec. It should have been
+	creating negative selectors, which it now does.
+
+0.02-i  04/03/2001  alpha mark II
+	- added SelectorLists
+	- started to add some things to make the interface closer to the
+	spec for those who prefer that, while maintaining the perlishness
+	for the others
+
+0.01-i  04/03/2001 alpha mark I
+	- initial tests and limited public release
+	- refoundation of the entire CSS::Parser into CSS::SAC
+
+before  22/10/1999 and previously
+	- the ugly and broken CSS::Parser (now obsolete)
