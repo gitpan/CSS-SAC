@@ -2,6 +2,7 @@
 ###
 # CSS::SAC - a SAC implementation for Perl
 # Robin Berjon <robin@knowscape.com>
+# 17/08/2001 - bugfixes...
 # 23/04/2001 - more enhancements
 # 19/03/2001 - second version, various suggestions and enhancements
 # 24/02/2001 - prototype mark I of the new model
@@ -19,7 +20,7 @@ use vars qw(
             %DIM_MAP
             %FUNC_MAP
            );
-$VERSION = '0.03';
+$VERSION = '0.04';
 
 use CSS::SAC::ConditionFactory  qw();
 use CSS::SAC::SelectorFactory   qw();
@@ -29,7 +30,7 @@ use CSS::SAC::SelectorList      qw();
 
 use Text::Balanced              qw();
 
-
+use constant DEBUG => 0;
 
 #---------------------------------------------------------------------#
 # build a few useful regexen and maps
@@ -37,18 +38,18 @@ use Text::Balanced              qw();
 
 # matches a quoted string
 $RE_STRING = Text::Balanced::gen_delimited_pat(q{'"}); #"
-$RE_STRING = qr/$RE_STRING/;
+$RE_STRING = qr/$RE_STRING/s;
 
 # matches a name token
 $RE_NAME = qr/
              (?:(?:\\(?:(?:[a-fA-F0-9]{1,6}[\t\x20])|[\x32-\xff]))|[a-zA-Z\x80-\xff0-9-])+
-             /x;
+             /xs;
 
 # matches a valid CSS ident (this may be wrong, needs testing)
 $RE_IDENT = qr/
-             (?:(?:\\(?:(?:[a-fA-F0-9]{1,6}[\t\x20])|[\x32-\xff]))|[a-zA-Z\x80-\xff])
-             (?:(?:\\(?:(?:[a-fA-F0-9]{1,6}[\t\x20])|[\x32-\xff]))|[a-zA-Z\x80-\xff0-9-])*
-             /x;
+             (?:(?:\\(?:(?:[a-fA-F0-9]{1,6}[\t\x20])|[ \x32-\xff]))|[a-zA-Z\x80-\xff])
+             (?:(?:\\(?:(?:[a-fA-F0-9]{1,6}[\t\x20])|[ \x32-\xff]))|[a-zA-Z\x80-\xff0-9_-])*
+             /xs;
 
 # matches a unicode range
 $RE_RANGE = qr/(?:
@@ -66,11 +67,11 @@ $RE_RANGE = qr/(?:
                   (?:\?{0,1}|[0-9a-fA-F])))))))
                 )
                )
-              /x;
+              /xs;
 
 
 # matches a number
-$RE_NUM = qr/(?:(?:[0-9]+)|(?:[0-9]*\.[0-9]+))/;
+$RE_NUM = qr/(?:(?:[0-9]*\.[0-9]+)|(?:[0-9]+))/;
 
 
 # maps a length or assoc value to it's constant
@@ -99,7 +100,7 @@ $RE_NUM = qr/(?:(?:[0-9]+)|(?:[0-9]*\.[0-9]+))/;
             counter     => COUNTER_FUNCTION,
             counters    => COUNTERS_FUNCTION,
             rect        => RECT_FUNCTION,
-            uri         => URI,
+            url         => URI,
             rgb         => RGBCOLOR,
            );
 
@@ -315,22 +316,28 @@ sub parse {
     #---> Start Parsing <---------------------------------------------#
 
     # start doc
+    warn "[SAC] start parsing\n" if DEBUG;
     $sac->[_dh_]->start_document if $sac->[_dh_can_]->{start_document};
 
     # before anything else occurs there can be a charset
+    warn "[SAC] parsing charset\n" if DEBUG;
     $sac->parse_charset(\$css);
     $sac->[_allow_charset_] = 0;
 
     # remove an eventual HTML open comment (not reported to handler)
+    warn "[SAC] removing HTML comments\n" if DEBUG;
     $css =~ s/^\s*<!--//;
 
     # parse some possible comments
+    warn "[SAC] parsing comments\n" if DEBUG;
     $sac->parse_comments(\$css);
 
     # parse some possible imports
+    warn "[SAC] parsing imports\n" if DEBUG;
     $sac->parse_imports(\$css);
 
     # parse some possible ns declarations
+    warn "[SAC] parsing ns decl\n" if DEBUG;
     $sac->parse_namespace_declarations(\$css);
 
     # enter the main parsing loop
@@ -338,10 +345,12 @@ sub parse {
     while (length($css)) {
 
         # parse some possible comments
+        warn "[SAC] parsing comments\n" if DEBUG;
         $sac->parse_comments(\$css);
 
         # if we've got a closing block, it's a closing @media
         if ($css =~ s/^\s*\}//) {
+            warn "[SAC] closing media rule\n" if DEBUG;
             $sac->[_dh_]->end_media($sac->[_tmp_media_]) if $sac->[_dh_can_]->{end_media};
             $sac->[_tmp_media_] = undef;
         }
@@ -351,6 +360,7 @@ sub parse {
 
             # @media
             if ($css =~ s/^\s*\@media\s+//i) {
+                warn "[SAC] parsing media\n" if DEBUG;
                 my $medialist = $sac->parse_medialist(\$css);
                 $sac->[_tmp_media_] = $medialist;
                 $sac->[_dh_]->start_media($medialist) if $sac->[_dh_can_]->{start_media};
@@ -359,6 +369,7 @@ sub parse {
 
             # @font-face
             elsif ($css =~ s/^\s*\@font-face\s+//i) {
+                warn "[SAC] parsing font-face\n" if DEBUG;
                 # parse the block
                 my $rule;
                 ($rule,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}'"/,qr/\s*/); #"
@@ -369,8 +380,9 @@ sub parse {
 
             # @page
             elsif ($css =~ s/^\s*\@page\s+//i) {
+                warn "[SAC] parsing page\n" if DEBUG;
                 # grab the name and pseudo-page if they're there
-                $css =~ s/^($RE_IDENT)?\s*(?::($RE_IDENT))//;
+                $css =~ s/^($RE_IDENT)?\s*(?::($RE_IDENT))?//;
                 my ($name,$pseudo) = ($1,$2);
 
                 # parse the block
@@ -386,6 +398,7 @@ sub parse {
             # at rules that we know nothing about will be like
             else {
                 my $at_rule;
+                warn "[SAC] parsing unknown at rule ($css)\n" if DEBUG;
 
                 # take off the @rule first
                 $css =~ s/^\s*(\@$RE_IDENT\s*)//;
@@ -400,22 +413,31 @@ sub parse {
                     $at_rule .= ';';
                 }
                 else {
-                    (undef,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}'"/,qr/\s*/); #"
-                    $at_rule .= $1;
+                    my $block;
+                    ($block,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}'"/,qr/\s*/); #"
+                    $at_rule .= $block;
                 }
 
                 $sac->[_dh_]->ignorable_at_rule($at_rule) if $sac->[_dh_can_]->{ignorable_at_rule};
             }
         }
 
+        # html end comment
+        elsif ($css =~ s/^\s*-->\s*//) {
+            # we don't do anything with those presently
+            warn "[SAC] removing HTML comments\n" if DEBUG;
+        }
+
         # we have selectors
         elsif (my $sel_list = $sac->parse_selector_list(\$css)) {
+            warn "[SAC] parsed selectors\n" if DEBUG;
             next unless @$sel_list;
             # callbacks
             $sac->[_dh_]->start_selector($sel_list) if $sac->[_dh_can_]->{start_selector};
 
             # parse the rule
             my $rule;
+            warn "[SAC] parsing rule\n" if DEBUG;
             ($rule,$css,undef) = Text::Balanced::extract_bracketed($css,q/{}'"/,qr/\s*/); #"
             $sac->parse_rule(\$rule);
 
@@ -423,24 +445,22 @@ sub parse {
             $sac->[_dh_]->end_selector($sel_list) if $sac->[_dh_can_]->{end_selector};
         }
 
-        # html end comment
-        elsif ($css =~ s/^\s*-->\s*//) {
-            # we don't do anything with those presently
-        }
-
         # trailing whitespace, should only happen at the very end
         elsif ($css =~ s/^\s+//) {
             # do nothing
+            warn "[SAC] just whitespace\n" if DEBUG;
         }
 
         # error
         else {
-            $sac->[_eh_]->warning('Unknown trailing tokens in style sheet');
+            last if ! length $css;
+            $sac->[_eh_]->fatal_error('Unknown trailing tokens in style sheet: "' . $css . '"');
             last;
         }
     }
 
     # end doc
+    warn "[SAC] end of document\n" if DEBUG;
     $sac->[_dh_]->end_document if $sac->[_dh_can_]->{end_document};
 
     #---> Finish Parsing <--------------------------------------------#
@@ -470,8 +490,12 @@ sub parse_charset {
         $sac->[_dh_]->charset($charset) if $sac->[_dh_can_]->{charset};
     }
     else {
-        $$css =~ s/[^;]*;//;
-        $sac->[_eh_]->warning('Unknown token in charset declaration');
+        if ($$css =~ s/[^;]*;//) {
+            $sac->[_eh_]->warning('Unknown token in charset declaration');
+        }
+        else {
+            $sac->[_eh_]->fatal_error('Unknown token in charset declaration');
+        }
     }
 }
 #---------------------------------------------------------------------#
@@ -490,7 +514,7 @@ sub parse_imports {
     while ($$css =~ s/^\s*\@import\s+//i) {
         # first get the uri
         my $uri;
-        if ($$css =~ s/^uri\(//) {
+        if ($$css =~ s/^url\(//) {
             $$css =~ s/^((?:$RE_STRING)|([^\)]*))\s*//;
             $uri = $1;
             $uri =~ s/^(?:'|")//; # "
@@ -512,8 +536,12 @@ sub parse_imports {
             $sac->[_dh_]->import_style($uri,$medialist) if $sac->[_dh_can_]->{import_style};
         }
         else {
-            $$css =~ s/[^;]*;//;
-            $sac->[_eh_]->warning('Unknown token in import rule');
+            if ($$css =~ s/[^;]*;//) {
+                $sac->[_eh_]->warning('Unknown token in import rule');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unknown token in import rule');
+            }
         }
 
         # remove comments and run again
@@ -535,12 +563,12 @@ sub parse_namespace_declarations {
     while ($$css =~ s/^\s*\@namespace\s+//i) {
         my ($prefix,$uri);
         # first get the prefix
-        if ($$css !~ /^uri\(/ and $$css =~ s/^($RE_IDENT)\s+//) {
+        if ($$css !~ /^url\(/ and $$css =~ s/^($RE_IDENT)\s+//) {
             $prefix = $1;
         }
 
         # then get the uri
-        if ($$css =~ s/^uri\(//) {
+        if ($$css =~ s/^url\(//) {
             $$css =~ s/^((?:$RE_STRING)|([^\)]*))\s*//;
             $uri = $1;
             $uri =~ s/^(?:'|")//; # "
@@ -566,8 +594,12 @@ sub parse_namespace_declarations {
             $sac->[_dh_]->namespace_declaration($prefix,$uri) if $sac->[_dh_can_]->{namespace_declaration};
         }
         else {
-            $$css =~ s/[^;]*;//;
-            $sac->[_eh_]->warning('Unknown token in namespace declaration');
+            if ($$css =~ s/[^;]*;//) {
+                $sac->[_eh_]->warning('Unknown token in namespace declaration');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unknown token in namespace declaration');
+            }
         }
 
         # remove comments and run again
@@ -609,7 +641,12 @@ sub parse_comments {
             $sac->[_dh_]->comment($1) if $sac->[_dh_can_]->{comment};
         }
         else {
-            $sac->[_eh_]->warning('Unterminated comment');
+            if ($$css =~ s/.*\*\///) {
+                $sac->[_eh_]->warning('Strange comment token, guessing the parse');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unterminated comment: unrecoverable');
+            }
         }
     }
 
@@ -635,7 +672,14 @@ sub parse_selector_list {
     while (1) {
 
         # we've reached the rule, or there isn't anything left to parse
-        if ($$css =~ m/^\s*\{/ or !length $$css) {
+        if ($$css =~ m/^\s*\{/) {
+            if (!@sels) {
+                @sels = ($sac->[_sf_]->create_element_selector(undef,undef));
+            }
+            last;
+        }
+
+        elsif (!length $$css) {
             last;
         }
 
@@ -653,12 +697,16 @@ sub parse_selector_list {
         # error
         else {
             # something wrong must have happened
-            $$css =~ s/^[^{]*//;
-            $sac->[_eh_]->warning('Unknown token in selector list');
-            last;
+            if ($$css =~ s/[^{]*//) {
+                $sac->[_eh_]->warning('Unknown token in selector list');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unknown token in selector list');
+            }
         }
     }
 
+    return unless @sels; # this returns nothing, there were no selectors (needed for parse)
     return CSS::SAC::SelectorList->new(\@sels);
 }
 #---------------------------------------------------------------------#
@@ -681,6 +729,7 @@ sub parse_simple_selector {
 
     my ($attr,$func,$args);
     while (1) {
+
         $sac->parse_comments($css);
 
         # end of selector
@@ -766,6 +815,12 @@ sub parse_simple_selector {
                 }
                 else {
                     $sac->[_eh_]->warning('Unknown token in attribute condition');
+            if ($$css =~ s/[^;]*;//) {
+                $sac->[_eh_]->warning('Unknown token in import rule');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unknown token in import rule');
+            }
                 }
             }
 
@@ -917,12 +972,14 @@ sub parse_simple_selector {
 
         # an error
         else {
-            $$css =~ s/^.*?(,|{)/$1/;
-            $sac->[_eh_]->warning('Unknown token in simple selector');
-            last;
+            if (s/^.*?(,|{)/$1/) {
+                $sac->[_eh_]->warning('Unknown token in simple selector');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unknown token in simple selector');
+            }
         }
     }
-
 
     ### process the tokens list
 
@@ -940,6 +997,19 @@ sub parse_simple_selector {
         # this is a serious exception
         $sac->[_eh_]->fatal_error('Really weird input in simple selector');
     }
+
+# here we need to check whether the next token is also a selector
+# if it is, we need to make an AND_CONDITION containing the two selectors
+# and to attach it to a universal selector
+# then we'll have to mix it into the $cond below.
+    if (@tokens) {
+        eval { $tokens[0]->SelectorType };
+        if (!$@) {
+            my $and_cond = $sac->[_cf_]->create_and_condition($selector,shift @tokens);
+            $selector = $sac->[_sf_]->create_element_selector(undef,undef);
+        }
+    }
+
 
     # create a conditional selector with all conditions
     my $cond = $sac->build_condition(\@tokens);
@@ -959,8 +1029,15 @@ sub parse_simple_selector {
             my $new_selector = shift @tokens;
             eval { $new_selector->SelectorType };
             if ($@) {
-                # this is a serious exception
-                $sac->[_eh_]->fatal_error('Really weird input in simple selector');
+#                last unless length $new_selector;
+                if (ref $new_selector) {
+                    unshift @tokens, $new_selector;
+                    $new_selector = $sac->[_sf_]->create_element_selector(undef,undef);
+                }
+                else {
+                    # this is a serious exception (we don't know what's here)
+                    $sac->[_eh_]->fatal_error('Really weird input in simple selector: "' . $$css . '"');
+                }
             }
 
             # create a conditional selector with all conditions
@@ -1009,10 +1086,10 @@ sub build_condition {
     # get all conditions
     my @conditions;
     while (@$tokens) {
-        eval { $tokens->[0]->SelectorType };
-        if (not $@) {
-            $sac->[_eh_]->fatal_error('Really weird input in simple selector');
-        }
+#        eval { $tokens->[0]->SelectorType };
+#        if (not $@) {
+#            $sac->[_eh_]->fatal_error('Really weird input in simple selector');
+#        }
         last if ! ref $tokens->[0];
         push @conditions, shift @$tokens;
     }
@@ -1043,6 +1120,7 @@ sub parse_rule {
     # remove { and }, and parse the content
     $$css =~ s/^\s*{//;
     $$css =~ s/}\s*$//;
+    warn "[SAC] removed curlies\n" if DEBUG;
     $sac->parse_style_declaration($css);
 }
 #---------------------------------------------------------------------#
@@ -1062,7 +1140,7 @@ sub parse_style_declaration {
     $$css =~ s/^\s*//;
     while (length $$css) {
         # the property
-        $$css =~ s/^($RE_IDENT)\s*//;
+        $$css =~ s/^(-?$RE_IDENT)\s*//; # includes the - prefix
         my $prop = $1;
         $sac->parse_comments($css);
 
@@ -1073,8 +1151,13 @@ sub parse_style_declaration {
         # the value
         my $lu = $sac->parse_property_value($css);
         if (!@$lu) {
-            $$css =~ s/^.*?;?\s*//;
-            $sac->[_eh_]->warning('Unknown token in property value');
+            last unless length $$css;
+            if ($$css =~ s/[^;}]*(?:;|\})?//) { # this is a bit dodgy...
+                $sac->[_eh_]->warning('Unknown token in style declaration');
+            }
+            else {
+                $sac->[_eh_]->fatal_error('Unknown token in style declaration: "' . $$css . '"');
+            }
             next;
         }
         $sac->parse_comments($css);
@@ -1114,6 +1197,8 @@ sub parse_property_value {
     my @lus;
     while (1) {
         my ($type,$text,$value);
+
+        $sac->parse_comments($css);
 
         # exit conditions
         if (! length($$css) or $$css =~ m/^\s*(?:;|!)/) {
@@ -1181,7 +1266,7 @@ sub parse_property_value {
         }
 
         # hex rgb
-        elsif ($$css =~ s/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})//) {
+        elsif ($$css =~ s/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})//) {
             $value = $1;
             $text = '#';
             $type = RGBCOLOR;
@@ -1589,30 +1674,39 @@ selecting. PositionalCondition needs to be updated to deal with that.
 
 =head1 BUGS
 
-None that I know of but this is early beta software and should be
-treated as such.
+ - the problem with attaching pseudo-elements to elements as
+ coselectors. I'm not sure which is the right representation. Don't
+ forget to update CSS::SAC::Writer too so that it writes it out
+ properly.
+
+ - see Bjoern's list
 
 =head1 ACKNOWLEDGEMENTS
 
  - Bjoern Hoehrmann for his immediate reaction and much valuable
  feedback and suggestions. It's certainly much harder to type with all
  those fingers that all those Mafia padres have cut off, but at least
- I get work done much faster than before.
+ I get work done much faster than before. And also those nasty bugs he
+ kindly uncovered.
 
- - Simon St.Laurent for posting this on xmlhack.com and thus pointing a
- lot of people to this module (as seen in my referer logs).
+ - Steffen Goeldner for spotting bugs and providing patches.
+
+ - Ian Hickson for very very very kind testing support, and all sorts
+ of niceties.
 
  - Manos Batsis for starting a very long discussion on this that
  eventually deviated into other very interesting topics, and for
  giving me some really weird style sheets to feed into this module.
 
- - Ian Hickson for very very very kind testing support, and all sorts
- of niceties.
+ - Simon St.Laurent for posting this on xmlhack.com and thus pointing a
+ lot of people to this module (as seen in my referer logs).
 
 And of course all the other people that have sent encouragement notes
 and feature requests.
 
 =head1 TODO
+
+ - add a pointer to the SAC W3 page
 
  - create the Exception classes
 
@@ -1628,6 +1722,18 @@ and feature requests.
 
  - add docs on how to write a {Document,Error}Handler, right now there
  is example code in Writer, but it isn't all clearly explained.
+
+ - find a way to make the '-' prefix to properties optional
+
+ - add a filter that switches events to spec names, and that can be used
+ directly through an option
+
+ - add DOM-like hasFeature support (in view of SAC 3)
+
+ - prefix all constants with SAC_. Keep the old ones around for a few 
+ versions, importable with :old-constants.
+
+ - update docs
 
 =head1 AUTHOR
 

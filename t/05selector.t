@@ -18,7 +18,7 @@ my $tsth = bless [];
 my $sac = CSS::SAC->new({ DocumentHandler => $tsth });
 
 my $css1 = <<'EOCSS';
-@namespace foo uri('http://www.foo.com/');
+@namespace foo url('http://www.foo.com/');
 
 * {}                E {}                foo|* {}            foo|E {}
 [bar] {}            [foo|bar] {}        E[bar] {}           [bar='baz'] {}

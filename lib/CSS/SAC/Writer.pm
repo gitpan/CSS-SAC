@@ -1,15 +1,15 @@
 
 ###
-# SAC Test Writer - the writer used in the tests
+# SAC Writer - a writer handler for SAC
 # Robin Berjon <robin@knowscape.com>
-# 23/04/2001
+# 23/04/2001 - documentation, misc details
+# 19/03/2001 - second version
 ###
 
-package CSS::SAC::TestWriter;
+package CSS::SAC::Writer;
 use strict;
-use vars qw($VERSION $ident $spacer);
-$VERSION = '0.01';
-$spacer = '  ';
+use vars qw($VERSION);
+$VERSION = '0.03';
 
 use CSS::SAC::Selector      qw(:constants);
 use CSS::SAC::Condition     qw(:constants);
@@ -21,8 +21,9 @@ use CSS::SAC::LexicalUnit   qw(:constants);
 #---------------------------------------------------------------------#
 use Class::ArrayObjects define => {
                                    fields => [qw(
+                                                 _out_
+                                                 _write_to_
                                                  _nsmap_
-                                                 _ref_
                                                )],
                                   };
 #---------------------------------------------------------------------#
@@ -35,20 +36,67 @@ use Class::ArrayObjects define => {
 
 
 #---------------------------------------------------------------------#
-# CSS::SAC::TestWriter->new(\$stringref)
+# CSS::SAC::Writer->new(\%options)
 # creates a new sac doc handler
 #---------------------------------------------------------------------#
 sub new {
     my $class = ref($_[0])?ref(shift):shift;
-    my $ref = shift;
+    my $options = shift;
+
+    # munge the options
+    my ($mode,$write_to);
+    if ($options->{string}) {
+        $mode = 'string';
+        $write_to = $options->{string};
+        die "option 'string' must be a scalar reference" unless ref $options->{string};
+    }
+    elsif ($options->{ioref}) {
+        $mode = 'fh';
+        $write_to = $options->{ioref};
+    }
+    elsif ($options->{filename}) {
+        $mode = 'fh';
+        open my($write_to), "$options->{filename}" or die $!;
+    }
+    else {
+        return undef;
+    }
 
     # prepare the object and the namespace map
-    $ident = 1;
     my $self = [];
     $self->[_nsmap_] = {};
-    $self->[_ref_] = $ref;
+
+    # set the right closure to write
+    if ($mode eq 'string') {
+        $self->[_out_] = \&write_string;
+    }
+    else {
+        $self->[_out_] = \&write_fh;
+    }
+    $self->[_write_to_] = $write_to;
 
     return bless $self, $class;
+}
+#---------------------------------------------------------------------#
+
+
+#---------------------------------------------------------------------#
+# write_string($self,$content)
+# the coderef we use to write to a string
+#---------------------------------------------------------------------#
+sub write_string {
+    ${$_[0]->[_write_to_]} .= $_[1];
+}
+#---------------------------------------------------------------------#
+
+
+#---------------------------------------------------------------------#
+# write_fh($self,$content)
+# the coderef we use to write to a filehandle
+#---------------------------------------------------------------------#
+sub write_fh {
+    my $fh = $_[0]->[_write_to_];
+    print $fh $_[1];
 }
 #---------------------------------------------------------------------#
 
@@ -69,8 +117,7 @@ sub new {
 #---------------------------------------------------------------------#
 sub start_document {
     my $dh = shift;
-    $dh->[_ref_] .= $spacer x $ident . "Stylesheet:\n";
-    $ident++;
+    # do nothing
 }
 #---------------------------------------------------------------------#
 
@@ -80,8 +127,7 @@ sub start_document {
 #---------------------------------------------------------------------#
 sub end_document {
     my $dh = shift;
-    $ident--;
-    $dh->[_ref_] .= $spacer x $ident . "End.\n";
+    # do nothing
 }
 #---------------------------------------------------------------------#
 
@@ -93,17 +139,11 @@ sub start_selector {
     my $dh = shift;
     my $sel_list = shift;
 
-    $dh->[_ref_] .= $spacer x $ident . "Style Rule:\n";
-    $ident++;
-    $dh->[_ref_] .= $spacer x $ident . "Selector:\n";
-    $ident++;
-    $dh->[_ref_] .= $spacer x $ident . "Chain:\n";
-    $ident++;
-
     my @sel_strings;
     for my $sel (@$sel_list) {
-        $dh->[_ref_] .= $spacer x $ident . $dh->stringify_selector($sel) . "\n";
+        push @sel_strings, $dh->stringify_selector($sel);
     }
+    $dh->[_out_]->($dh, "\n" . join(', ', @sel_strings) . ' {');
 }
 #---------------------------------------------------------------------#
 
@@ -159,7 +199,7 @@ sub ignorable_at_rule {
     my $dh = shift;
     my $at_rule = shift;
 
-    $dh->[_out_]->($dh, "\n/* $at_rule */\n");
+    $dh->[_out_]->($dh, "\n/* ignorable: $at_rule */\n");
 }
 #---------------------------------------------------------------------#
 
@@ -172,7 +212,7 @@ sub import_style {
     my $uri = shift;
     my $media = shift;
 
-    $dh->[_out_]->($dh, "\n\@import uri($uri) " . join(', ', @$media) . ";\n");
+    $dh->[_out_]->($dh, "\n\@import url($uri) " . join(', ', @$media) . ";\n");
 }
 #---------------------------------------------------------------------#
 
@@ -190,7 +230,7 @@ sub namespace_declaration {
         $dh->[_nsmap_]->{$uri} = $prefix;
     }
 
-    $dh->[_out_]->($dh, "\n\@namespace" . ((defined $prefix)?" $prefix ":' ') . "uri($uri);\n");
+    $dh->[_out_]->($dh, "\n\@namespace" . ((defined $prefix)?" $prefix ":' ') . "url($uri);\n");
 }
 #---------------------------------------------------------------------#
 
