@@ -8,4 +8,15 @@ WriteMakefile(
                         Text::Balanced      => '1.84',
                         Class::ArrayObjects => '0.04',
                        },
+
+    ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
+      (ABSTRACT_FROM  => 'SAC.pm', # retrieve abstract from module
+       AUTHOR         => 'Robin Berjon') : ()),
+
+    LICENSE           => 'perl',
+    'dist'            => {
+      PREOP     => 'chmod 600 Makefile.PL',
+      TARFLAGS	=> '--group=cpan --owner=bjoern -cvf',
+    },
+
 );

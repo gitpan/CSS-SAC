@@ -20,7 +20,7 @@ use vars qw(
             %DIM_MAP
             %FUNC_MAP
            );
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 use CSS::SAC::ConditionFactory  qw();
 use CSS::SAC::SelectorFactory   qw();

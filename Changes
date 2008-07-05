@@ -1,5 +1,8 @@
 Revision history for Perl extension CSS::SAC.
 
+0.07  Sun Jul 5 21:47 2008
+        - Some kwalitee fixes
+
 0.06  Sun Oct 19 21:47 2004
         - Module now maintained by Bjoern Hoehrmann
         - More accurate behavior wrt to namespace declarations
